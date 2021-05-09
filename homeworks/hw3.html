@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+	<link rel="icon" href="../files/images/favicon.ico" type="image/x-icon" />
+	<title>Hw3</title>
+</head>
+
+<body>
+
+	<script src="https://cdn.jsdelivr.net/npm/jquery@2.1.4/dist/jquery.min.js"></script>
+	<script src="../js/KeyboardState.js"></script>
+
+	<script type="module">
+		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.117.0/build/three.module.js';
+		import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.117.0/examples/jsm/controls/OrbitControls.js';
+		import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.117.0/examples/jsm/loaders/OBJLoader.js';
+		import { MTLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.117.0/examples/jsm/loaders/MTLLoader.js';
+
+		var camera, cameraMap, cameraHUD, scene, sceneHUD, renderer, controls;
+		var clock;
+		var keyboard = new KeyboardState();
+		var Cars = [], Obstacals = [];
+
+		(function () {
+			Math.clamp = function (val, min, max) {
+				return Math.min(Math.max(val, min), max);
+			}
+		})();
+		
+		function MathClamp(val, min, max) {
+			return Math.min(Math.max(val, min), max);
+		}
+		
+		function exponentialEaseOut(k) {
+			return k === 1 ? 1 : - Math.pow(2, - 10 * k) + 1;
+		}
+
+		function getRandom(min, max) {
+			return Math.floor(Math.random() * (max - min + 1)) + min;
+		};
+
+		function checkIntersect(circle, rect) {
+			/* Return TRUE iff rectangle R intersects circle with centerpoint C and
+			radius Rad. */
+			let Rad2 = circle.rad * circle.rad;
+			let Rad = circle.rad;
+			/* Translate coordinates, placing C at the origin. */
+			let max = rect.max.clone().sub(circle.center);
+			let min = rect.min.clone().sub(circle.center);
+			//R->max.x -= C->x;  R->max.z -= C->y;
+			//R->min.x -= C->x;  R->min.z -= C->y;
+
+			if (max.x < 0) 			/* R to left of circle center */
+				if (max.z < 0) 		/* R in lower left corner */
+					return ((max.x * max.x + max.z * max.z) < Rad2);
+				else if (min.z > 0) 	/* R in upper left corner */
+					return ((max.x * max.x + min.z * min.z) < Rad2);
+				else 					/* R due West of circle */
+					return (Math.abs(max.x) < Rad);
+
+			else if (min.x > 0)  	/* R to right of circle center */
+				if (max.z < 0) 	/* R in lower right corner */
+					return ((min.x * min.x + max.z * max.z) < Rad2);
+				else if (min.z > 0)  	/* R in upper right corner */
+					return ((min.x * min.x + min.z * min.z) < Rad2);
+				else 				/* R due East of circle */
+					return (min.x < Rad);
+			else				/* R on circle vertical centerline */
+				if (max.z < 0) 	/* R due South of circle */
+					return (Math.abs(max.z) < Rad);
+				else if (min.z > 0)  	/* R due North of circle */
+					return (min.z < Rad);
+				else 				/* R contains circle centerpoint */
+					return (true);
+		};
+
+		class Car {
+			constructor(modelName, size = 20) {
+				readModel(modelName, size);
+				this.speed = 0;
+				this.maxSpeed = 120;
+				this.maxSpeedReverse = -this.maxSpeed * 0.5;
+				this.acceleration = 30;
+				this.accelerationReverse = 0;
+				this.carOrientation = 0;
+				this.length = 1;
+				this.wheelOrientation = 0;
+				this.turningRadius = 6;
+				this.steeringWheelSpeed = 1.5;
+				this.maxSteeringRotation = 0.6;
+				this.deceleration = this.acceleration * 2;
+				this.brakingDeceleration = 1;
+				this.brakePower = 5;
+			}
+
+			update(delta) {
+
+				this.accelerationReverse = this.acceleration * 2;
+				if (keyboard.pressed("W")) {
+					this.speed = Math.clamp(this.speed + delta * this.acceleration, this.maxSpeedReverse, this.maxSpeed);
+					this.acceleration = Math.clamp(this.acceleration + delta, - 10, 10);
+				}
+				if (keyboard.pressed("S")) {
+					this.speed = Math.clamp(this.speed - delta * this.accelerationReverse, this.maxSpeedReverse, this.maxSpeed);
+					this.acceleration = Math.clamp(this.acceleration - delta, - 10, 10);
+				}
+				if (keyboard.pressed("space")) {
+					this.brakingDeceleration = this.brakePower;
+				}
+				if (keyboard.pressed("A")) {
+					this.wheelOrientation = Math.clamp(this.wheelOrientation + delta * this.steeringWheelSpeed, - this.maxSteeringRotation, this.maxSteeringRotation);
+				}
+				if (keyboard.pressed("D")) {
+					this.wheelOrientation = Math.clamp(this.wheelOrientation - delta * this.steeringWheelSpeed, - this.maxSteeringRotation, this.maxSteeringRotation);
+				}
+				// this.speed decay
+				if (!(keyboard.pressed("W") || keyboard.pressed("S"))) {
+					if (this.speed > 0) {
+						let k = exponentialEaseOut(this.speed / this.maxSpeed);
+						this.speed = Math.clamp(this.speed - k * delta * this.deceleration * this.brakingDeceleration, 0, this.maxSpeed);
+						//console.log("1", this.speed);
+						this.acceleration = Math.clamp(this.acceleration - k * delta, -10, 10);
+					} else {
+						let k = exponentialEaseOut(this.speed / this.maxSpeedReverse);
+						this.speed = Math.clamp(this.speed + k * delta * this.accelerationReverse * this.brakingDeceleration, this.maxSpeedReverse, 0);
+						this.acceleration = Math.clamp(this.acceleration + k * delta, - 10, 10);
+					}
+				}
+				// steering decay
+				if (!(keyboard.pressed("A") || keyboard.pressed("D"))) {
+					if (this.wheelOrientation > 0) {
+						this.wheelOrientation = Math.clamp(this.wheelOrientation - delta * this.steeringWheelSpeed, 0, this.maxSteeringRotation);
+					} else {
+						this.wheelOrientation = Math.clamp(this.wheelOrientation + delta * this.steeringWheelSpeed, - this.maxSteeringRotation, 0);
+					}
+				}
+
+				let forwardDelta = - this.speed * delta;
+
+				this.carOrientation -= (forwardDelta * this.turningRadius * 0.02) * this.wheelOrientation;
+				let root = scene.getObjectByName('Taxi');
+				//console.log(root);
+				if (root) {
+					//console.log(this.speed);
+					root.position.x += Math.sin(this.carOrientation) * forwardDelta;
+					root.position.z += Math.cos(this.carOrientation) * forwardDelta;
+					root.rotation.y = this.carOrientation;
+				}
+			}
+		}
+
+		class Obstacal {
+			constructor(mesh, x = 0, y = 0, z = 0) {
+				this.rad = 5;
+				this.mesh = mesh;
+				this.pos = new THREE.Vector3(x, y, z);
+				this.mesh.position.copy(this.pos);
+				scene.add(this.mesh);
+			}
+		}
+
+		init();
+		animate();
+
+		function loadCubemap() {
+			let path = "../files/cubeMap/NiagaraFalls3/";
+			let format = '.jpg';
+			let urls = [
+				path + 'px' + format, path + 'nx' + format,
+				path + 'py' + format, path + 'ny' + format,
+				path + 'pz' + format, path + 'nz' + format
+			];
+			let loader = new THREE.CubeTextureLoader();
+			loader.setCrossOrigin('');
+			let cubeMap = loader.load(urls);
+			cubeMap.format = THREE.RGBFormat;
+			return cubeMap;
+		}
+
+		function init() {
+			let container = document.createElement('div');
+			document.body.appendChild(container);
+
+			renderer = new THREE.WebGLRenderer();
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			container.appendChild(renderer.domElement);
+			renderer.setClearColor(0xffffff);
+			renderer.autoClear = false;
+			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+			camera.position.z = 100;
+			camera.position.y = 100;
+			controls = new OrbitControls(camera, renderer.domElement);
+
+			cameraMap = new THREE.OrthographicCamera(-100, 100, 100, -100, -50, 50);
+			//take a while to find a good view
+			cameraMap.position.set(0, 50, 0);
+			cameraMap.up.set(1, 0, 0);
+
+			// scene
+
+			scene = new THREE.Scene();
+
+			let loader = new THREE.TextureLoader()
+			let texture = loader.load('https://i.imgur.com/ojR7G2o.jpg');
+			texture.wrapS = THREE.RepeatWrapping;
+			texture.wrapT = THREE.RepeatWrapping;
+			texture.repeat.set(40, 40);
+			let mesh = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), new THREE.MeshPhongMaterial({ map: texture }));
+			mesh.rotation.x = -Math.PI / 2;
+			scene.add(mesh);
+
+			let cubeMap = loadCubemap();
+			scene.background = cubeMap;
+
+			let ambient = new THREE.AmbientLight(0x444444);
+			scene.add(ambient);
+
+			//gridxz = new THREE.GridHelper (500, 8,'red','black');
+			//scene.add (gridxz);
+
+			let axis = new THREE.AxesHelper(20);
+			// scene.add (axis);
+
+			let directionalLight = new THREE.DirectionalLight(0xffffff);
+			directionalLight.position.set(0, 0, 1).normalize();
+			scene.add(directionalLight);
+
+			let pointLight = new THREE.PointLight(0xffffff);
+			pointLight.position.set(100, 200, -100);
+			scene.add(pointLight);
+			window.addEventListener('resize', onWindowResize, false);
+
+			///////////////////////////////////////////////////////////////////	
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(window.innerWidth, window.innerHeight);
+
+			}
+			Cars.push(new Car('Taxi', 20));
+
+			let Taxi = scene.getObjectByName('Taxi');
+			//console.log(Taxi);
+
+			for (let i = 0; i < 5; i++) {
+				let mesh = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 10, 20), new THREE.MeshPhongMaterial({ color: 0xffffff }));
+				Obstacals.push(new Obstacal(mesh, getRandom(-100, 100), 5, getRandom(-100, 100)));
+			}
+			clock = new THREE.Clock();
+			window.addEventListener('resize', onWindowResize, false);
+		}
+
+		function readModel(modelName, targetSize = 40) {
+
+			let onProgress = function (xhr) {
+
+				if (xhr.lengthComputable) {
+					let percentComplete = xhr.loaded / xhr.total * 100;
+					console.log(Math.round(percentComplete, 2) + '% downloaded');
+				}
+
+			};
+
+			let onError = function (xhr) { };
+
+			let mtlLoader = new MTLLoader();
+			mtlLoader.setPath('../files/models/');
+			mtlLoader.load(modelName + '.mtl', function (materials) {
+
+				materials.preload();
+
+				let objLoader = new OBJLoader();
+				objLoader.setMaterials(materials);
+				objLoader.setPath('../files/models/');
+				objLoader.load(modelName + '.obj', function (object) {
+
+					let theObject = unitize(object, targetSize);
+					//theObject.add ( new THREE.BoxHelper (theObject) )
+					theObject.name = modelName;
+					scene.add(theObject);
+					//theObject.setRotationFromEuler (new THREE.Euler (3.1416/2, 0, -3.1416/2, 'ZYX'))
+
+				}, onProgress, onError);
+
+			});
+
+		}
+		//2704
+		////////////////////////////////////////
+		// wrap an Object3D around the given object
+		// so that it is centered at +Y axis
+		// 
+		function unitize(object, targetSize) {
+
+			// find bounding box of 'object'
+			let box3 = new THREE.Box3();
+			box3.setFromObject(object);
+			let size = new THREE.Vector3();
+			size.subVectors(box3.max, box3.min);
+			let center = new THREE.Vector3();
+			center.addVectors(box3.max, box3.min).multiplyScalar(0.5);
+			// size: 52.246768951416016, 39.40153622627258, 110.97390747070312
+			// 26, 20, 55
+			console.log('center: ' + center.x + ', ' + center.y + ', ' + center.z);
+			console.log('size: ' + size.x + ', ' + size.y + ', ' + size.z);
+
+			// uniform scaling according to objSize
+			let objSize = Math.max(size.x, size.y, size.z);
+			let scaleSet = targetSize / objSize;
+
+			let theObject = new THREE.Object3D();
+			theObject.add(object);
+			object.scale.set(scaleSet, scaleSet, scaleSet);
+			object.position.set(-center.x * scaleSet, -center.y * scaleSet + size.y / 2 * scaleSet, -center.z * scaleSet);
+			//object.rotation.x = Math.PI;
+			object.rotation.y = Math.PI;
+			//object.rotation.z = Math.PI;
+
+			return theObject;
+
+		}
+
+		function animate() {
+			let dt = clock.getDelta();
+			Cars[0].update(dt);
+			keyboard.update();
+
+			Obstacals.forEach(function (o) {
+				let Taxi = scene.getObjectByName('Taxi');
+				//console.log("ASD", new THREE.Vector3(o.pos));
+				if (Taxi != undefined) {
+					let box2 = new THREE.Box3();
+					box2.setFromObject(Taxi);
+					let circle = { center: new THREE.Vector3(o.pos.x, 0, o.pos.z), rad: 4 };
+					let rect = { min: new THREE.Vector3(box2.min.x, 0, box2.min.z), max: new THREE.Vector3(box2.max.x, 0, box2.max.z) };
+					//console.log(checkIntersect(circle, rect));
+					if (checkIntersect(circle, rect)) {
+						Cars[0].speed = 0;
+					}
+				}
+			});
+			requestAnimationFrame(animate);
+			render();
+		}
+
+		function render() {
+
+			let Taxi = scene.getObjectByName('Taxi');
+
+			let WW = window.innerWidth;
+			let HH = window.innerHeight;
+			renderer.clear();
+			renderer.setViewport(0, 0, WW / 2, HH);
+			camera.aspect = WW / 2 / HH;
+			if (Taxi != undefined) {
+				let test = Taxi.localToWorld(new THREE.Vector3(0, 20, 40));
+				//camera.position.set (Taxi.position.x, 50, Taxi.position.z);
+				camera.position.copy(test);
+				camera.lookAt(Taxi.position.x, 0, Taxi.position.z);
+			}
+			camera.updateProjectionMatrix();
+			renderer.render(scene, camera);
+
+			renderer.setViewport(WW / 2, 0, WW / 2, HH);
+			if (Taxi != undefined) {
+				cameraMap.position.set(Taxi.position.x, 50, Taxi.position.z);
+				//console.log(Taxi);
+			}
+			cameraMap.rotation.x = -Math.PI / 2;
+			cameraMap.updateProjectionMatrix();
+			renderer.render(scene, cameraMap);
+
+		}
+
+
+	</script>
+</body>
+
+</html>
