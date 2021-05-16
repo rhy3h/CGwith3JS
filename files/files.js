@@ -1,9 +1,12 @@
 var files = {
 	
-	"webgl": [
-		"minimal",
-		"objloader", 
-		"perlinnoise"
+	"homeworks": [
+		"hw1",
+		"hw2", 
+		"hw3",
+		"hw4",
+		"hw5",
+		"hw6",
 	],
 	
 };

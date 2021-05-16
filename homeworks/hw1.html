@@ -1,56 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-	<link rel="icon" href="../files/images/favicon.ico" type="image/x-icon" />
-	<title>Hw1</title>
-	<style>
-		#info {
-			position: absolute;
-			top: 2%;
-			width: 100%;
-			font-size: 24px;
-			padding: 24px;
-			text-align: center;
-			color: #000000
-		}
 
-		body {
-			overflow: hidden
-		}
+<meta charset="utf-8">
+<title>hw1</title>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<link rel="shortcut icon" href="../files/images/favicon.ico" />
+<link type="text/css" rel="stylesheet" href="main.css">
+<style>
+	body {
+		background-color: #cce0ff;
+		color: #000;
+	}
+	a {
+		color: #08f;
+	}
+	.button {
+		background-color: #e7e7e7;
+		border: none;
+		color: black;
+		padding: 8px;
+		text-align: center;
+		text-decoration: none;
+		display: inline-block;
+		font-size: 14px;
+	}
+</style>
 
-		.button {
-			background-color: #e7e7e7;
-			border: none;
-			color: black;
-			padding: 8px;
-			text-align: center;
-			text-decoration: none;
-			display: inline-block;
-			font-size: 14px;
-		}
-	</style>
 </head>
 
 <body>
-	<strong>
-		<div id="info">Homework 1
-	</strong>
-	<br>
-	<br>
+
+<div id="info">
+	<h2><a href="http://threejs.org" target="_blank" rel="noopener">three.js</a> - time-based animation, button</h2>
 	<input name="toggle" class="button" type="submit" id="toggle" value="Turn" style="width:10%" />
 	<input name="reset" class="button" type="submit" id="reset" value="Reset" style="width:10%" />
 	<input name="switch" class="button" type="submit" id="switch" value="Analog" style="width:10%" />
-	</div>
-</body>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/jquery@2.1.4/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.117.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.117.0/examples/js/controls/OrbitControls.js"></script>
+	
+<script>
+	var SCREEN_WIDTH = window.innerWidth;
+	var SCREEN_HEIGHT = window.innerHeight;
+	var aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+	
+	var container;
+	var camera, scene, renderer;
 
-<script type="module">
-
-	import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.117.0/build/three.module.js';
-
-	var renderer, scene, camera;
 	var clockFace, analog, quartz, sector, group1, group2, group3;
 	var angle1 = 0, angle2 = 0, angle3 = 0;  // initialization IMPORTANT!
 	let turn = false;
@@ -103,38 +103,48 @@
 	});
 
 	var type = 1;
-
+		
 	init();
 	animate1();
 	animate2();
 	animate3();
-
+		
 	function init() {
-		renderer = new THREE.WebGLRenderer();
-		document.body.appendChild(renderer.domElement);
-		var width = window.innerWidth;
-		var height = window.innerHeight;
-		renderer.setSize(width, height);
-
-		renderer.setClearColor(0xFFFFFF);
-
+			
+		container = document.createElement( 'div' );
+		document.body.appendChild( container );
+			
+		// scene
+			
 		scene = new THREE.Scene();
-		/*
-		var grid = new THREE.GridHelper(20,20, 0xaaaa00, 0x333333);
-		scene.add (grid);
-		var axes = new THREE.AxesHelper (5);
-		scene.add (axes);
-		*/
-		camera = new THREE.PerspectiveCamera(25, width / height, 1, 100);
-		camera.position.y = 0;
-		camera.position.z = 40;
+		scene.background = new THREE.Color( 0xcce0ff );
+			
+		// camera
+			
+		camera = new THREE.PerspectiveCamera( 30, aspect, 1, 10000 );
+		camera.position.set( 0, 0, 40 );
 		camera.lookAt(new THREE.Vector3(0, 0, 0));
-
-		//controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-		window.addEventListener('resize', onWindowResize, false);
-
-		// Clock Face
+		
+		// renderer
+			
+		renderer = new THREE.WebGLRenderer();
+		renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+			
+		container.appendChild( renderer.domElement );
+			
+		// controls
+			
+		// var controls = new THREE.OrbitControls( camera, renderer.domElement );
+			
+		// grid
+			
+		// let gridXZ = new THREE.GridHelper(200, 20, 'red', 'black');
+		// scene.add(gridXZ);
+			
+		// resize
+			
+		window.addEventListener( 'resize', onWindowResize, false );
+			
 		var clockGeometry = new THREE.CylinderBufferGeometry(6, 6, 0.1, 500);
 		var clockMaterial = new THREE.MeshBasicMaterial({ color: "black" });
 		clockFace = new THREE.Mesh(clockGeometry, clockMaterial);
@@ -162,7 +172,6 @@
 		group2.add(quartz);
 		scene.add(group2);
 
-
 		// sector
 		var geometry = new THREE.CylinderBufferGeometry(6, 6, 0.5, 500, 1, false, 0, 0);
 		var material = new THREE.MeshBasicMaterial({ color: "black" });
@@ -174,15 +183,17 @@
 		scene.add(sector);
 
 	}
-
+		
 	function onWindowResize() {
-
-		var width = window.innerWidth;
-		var height = window.innerHeight;
-		camera.aspect = width / height;
+		
+		SCREEN_WIDTH = window.innerWidth;
+		SCREEN_HEIGHT = window.innerHeight;
+		
+		camera.aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
 		camera.updateProjectionMatrix();
-		renderer.setSize(width, height);
-
+		
+		renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+		
 	}
 
 	function animate1() {
@@ -223,14 +234,15 @@
 		requestAnimationFrame(animate3);
 		render();
 	}
-
+	
 	function render() {
-
-		renderer.render(scene, camera);
+		
+		renderer.render( scene, camera );
 
 	}
 
 </script>
-
+	
+</body>
 
 </html>
